@@ -1,0 +1,67 @@
+# rtai/indicators/lpi.py
+"""
+LPI Oscillator - Liquidation Pressure Index come RSI-like
+========================================================
+
+Trasforma LPI in oscillatore 0-100 basato su liquidazioni buy/sell.
+"""
+
+from rtai.indicators.filters import Oscillator, EventAccumulator
+from rtai.config import INDICATORS, EVENT_WINDOWS
+
+class LPIOsc:
+    """LPI trasformato in oscillatore RSI-like con clustering eventi"""
+    
+    def __init__(self, **kwargs):
+        # Usa parametri specifici per LPI dalla config
+        params = {**INDICATORS["lpi"], **kwargs}
+        self.osc = Oscillator(**params)
+        
+        # Event accumulator per clustering liquidazioni
+        self.liq_accumulator = EventAccumulator(EVENT_WINDOWS["liquidation"])
+        self.last_raw = 0.0
+
+    def on_minute(self, liq_buy_notional, liq_sell_notional, timestamp=None):
+        """
+        Processa liquidazioni per minuto
+        
+        Args:
+            liq_buy_notional: Notional liquidazioni buy-side (short squeeze)
+            liq_sell_notional: Notional liquidazioni sell-side (long squeeze)
+            timestamp: Timestamp per event accumulator
+            
+        Returns:
+            Dict con valori LPI processati
+        """
+        if liq_buy_notional is None:
+            liq_buy_notional = 0.0
+        if liq_sell_notional is None:
+            liq_sell_notional = 0.0
+            
+        # Calcola LPI raw per minuto
+        total_liq = liq_buy_notional + liq_sell_notional
+        if total_liq > 1e-9:
+            lpi_raw = (liq_buy_notional - liq_sell_notional) / total_liq
+        else:
+            lpi_raw = 0.0
+            
+        # Accumula eventi se timestamp fornito
+        if timestamp is not None:
+            # Usa signed magnitude per direction
+            signed_magnitude = liq_buy_notional - liq_sell_notional
+            accumulated = self.liq_accumulator.add(timestamp, signed_magnitude)
+            # Usa accumulated se significativo, altrimenti raw
+            if abs(accumulated) > abs(lpi_raw * total_liq):
+                lpi_raw = accumulated / max(total_liq, 1e-9)
+        
+        self.last_raw = lpi_raw
+        rsi_like, z, zf = self.osc.step(lpi_raw)
+        
+        return {
+            "lpi_raw": lpi_raw,
+            "lpi_z": z,
+            "lpi_zf": zf,
+            "lpi_rsi": rsi_like,
+            "liq_buy_notional": liq_buy_notional,
+            "liq_sell_notional": liq_sell_notional,
+        }

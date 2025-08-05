@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTAI Trading Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Vue.js 2 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.7.14/dist/vue.min.js"></script>
+    
+    <!-- TradingVue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/trading-vue-js@1.0.2/dist/trading-vue.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/trading-vue-js@1.0.2/dist/trading-vue.css">
+    
+    <!-- TradingVue Overlays -->
+    <script src="https://cdn.jsdelivr.net/npm/tvjs-overlays@1.0.0/dist/tvjs-overlays.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="dashboard-header">
+            <h1>🚀 RTAI Live Trading Dashboard</h1>
+            <div class="connection-status" :class="{ connected: wsConnected, disconnected: !wsConnected }">
+                {{ wsConnected ? '🟢 Connected' : '🔴 Disconnected' }}
+            </div>
+            <div class="controls">
+                <button @click="runBacktest" :disabled="backtestRunning" class="backtest-btn">
+                    {{ backtestRunning ? '⏳ Running...' : '📊 Run Backtest' }}
+                </button>
+                <select v-model="selectedSymbol" @change="changeSymbol">
+                    <option value="BTCUSDT">BTC/USDT</option>
+                    <option value="ETHUSDT">ETH/USDT</option>
+                    <option value="ADAUSDT">ADA/USDT</option>
+                </select>
+                
+                <!-- Authentication Controls -->
+                <div class="auth-controls">
+                    <button @click="toggleApiKeyInput" class="auth-btn" :class="{ 'authenticated': userInfo }">
+                        {{ userInfo ? `🔐 ${userInfo.user}` : '🔑 API Key' }}
+                    </button>
+                    
+                    <div v-if="showApiKeyInput" class="api-key-input">
+                        <input 
+                            type="password" 
+                            v-model="apiKey" 
+                            placeholder="Enter API key..."
+                            @keyup.enter="saveApiKey"
+                            class="api-key-field"
+                        >
+                        <button @click="saveApiKey" class="save-btn">💾</button>
+                        <button @click="clearApiKey" class="clear-btn">🗑️</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dashboard-content">
+            <!-- Main Chart -->
+            <div class="chart-container">
+                <trading-vue 
+                    :data="chartData" 
+                    :width="chartWidth" 
+                    :height="chartHeight"
+                    :overlays="overlays"
+                    :extensions="extensions"
+                    :colors="colors"
+                    ref="tvChart">
+                </trading-vue>
+            </div>
+            
+            <!-- Indicators Panel -->
+            <div class="indicators-panel">
+                <h3>📈 Live Indicators</h3>
+                <div class="indicator-grid">
+                    <div class="indicator-card" v-for="(value, key) in latestIndicators" :key="key">
+                        <div class="indicator-name">{{ formatIndicatorName(key) }}</div>
+                        <div class="indicator-value" :class="getIndicatorClass(key, value)">
+                            {{ formatIndicatorValue(value) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stats Panel -->
+            <div class="stats-panel" v-if="backtestResults">
+                <h3>📊 Backtest Results</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Return:</span>
+                        <span class="stat-value positive">{{ backtestResults.total_return }}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Sharpe Ratio:</span>
+                        <span class="stat-value">{{ backtestResults.sharpe_ratio }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Max Drawdown:</span>
+                        <span class="stat-value negative">{{ backtestResults.max_drawdown }}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Win Rate:</span>
+                        <span class="stat-value">{{ backtestResults.win_rate }}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Log Panel -->
+        <div class="log-panel">
+            <h4>📝 Live Feed</h4>
+            <div class="log-container" ref="logContainer">
+                <div v-for="(log, index) in logs" :key="index" class="log-entry" :class="log.type">
+                    <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+                    <span class="log-message">{{ log.message }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

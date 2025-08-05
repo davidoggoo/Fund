@@ -1,0 +1,1 @@
+2025-08-05 18:20:41.351 | ERROR | __main__ | run_live:219 | ❌ Error in live trading: 'LiveTrader' object has no attribute 'start_live_trading'

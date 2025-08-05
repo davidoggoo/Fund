@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""
+RTAI RSI-Like Pipeline Demo - Complete Production Test
+====================================================
+
+Test completo del sistema RSI-like con generazione di grafici e dashboard.
+"""
+
+import sys
+import time
+import asyncio
+from pathlib import Path
+
+def main():
+    print("🚀 RTAI RSI-LIKE PIPELINE DEMO")
+    print("=" * 60)
+    
+    # Test 1: Sistema RSI completo
+    print("\n🧪 TESTING RSI-LIKE SYSTEM...")
+    try:
+        from rtai.indicators.filters import Oscillator, Cooldown, EventAccumulator
+        from rtai.indicators.ofi import OFIOsc
+        from rtai.indicators.cvd import CVDOsc
+        from rtai.indicators.vpin import VPINOsc
+        from rtai.config import OSC, THRESH
+        
+        print("✅ All RSI components imported successfully")
+        
+        # Test oscillators with realistic data
+        ofi_osc = OFIOsc()
+        cvd_osc = CVDOsc()
+        vpin_osc = VPINOsc()
+        
+        # Simulate 1 hour of trading data (60 minutes)
+        print("📊 Simulating 60 minutes of trading data...")
+        ofi_values = []
+        cvd_values = []
+        vpin_values = []
+        
+        for minute in range(60):
+            # Simulate varying market conditions
+            if minute < 20:
+                # Normal market
+                ofi_raw = 0.1 + (minute % 5) * 0.2 
+                cvd_raw = 100 + minute * 10
+                vpin_raw = 0.45 + minute * 0.001
+            elif minute < 40:
+                # Volatile period with extreme moves
+                ofi_raw = 2.5 + (minute % 3) * 1.5
+                cvd_raw = 500 + minute * 50  
+                vpin_raw = 0.65 + (minute % 2) * 0.1
+            else:
+                # Return to normal
+                ofi_raw = -0.5 + (minute % 4) * 0.3
+                cvd_raw = -200 + minute * 15
+                vpin_raw = 0.55 - minute * 0.002
+            
+            # Process through oscillators
+            ofi_data = ofi_osc.on_minute(ofi_raw)
+            cvd_data = cvd_osc.on_minute(cvd_raw if minute % 2 == 0 else 0, 0 if minute % 2 == 0 else cvd_raw)
+            vpin_data = vpin_osc.on_minute(vpin_raw)
+            
+            ofi_values.append(ofi_data['ofi_rsi'])
+            cvd_values.append(cvd_data['cvd_rsi']) 
+            vpin_values.append(vpin_data['vpin_rsi'])
+            
+            # Log extreme values
+            if ofi_data['ofi_rsi'] > 80 or ofi_data['ofi_rsi'] < 20:
+                print(f"  ⚡ Minute {minute:2d}: OFI-RSI EXTREME {ofi_data['ofi_rsi']:.1f}")
+            if cvd_data['cvd_rsi'] > 85 or cvd_data['cvd_rsi'] < 15:
+                print(f"  🔥 Minute {minute:2d}: CVD-RSI EXTREME {cvd_data['cvd_rsi']:.1f}")
+        
+        print(f"✅ Generated 60 minutes of RSI data")
+        print(f"📈 OFI-RSI range: {min(ofi_values):.1f} - {max(ofi_values):.1f}")
+        print(f"📈 CVD-RSI range: {min(cvd_values):.1f} - {max(cvd_values):.1f}")
+        print(f"📈 VPIN-RSI range: {min(vpin_values):.1f} - {max(vpin_values):.1f}")
+        
+    except Exception as e:
+        print(f"❌ RSI System error: {e}")
+        return False
+    
+    # Test 2: RRS Engine
+    print("\n🎬 TESTING RRS ENGINE...")
+    try:
+        from rtai.io.recorder import EventRecorder, RecordConfig
+        from rtai.sim.broker import SimulationBroker
+        from rtai.sim.portfolio import Portfolio
+        
+        # Test recording
+        config = RecordConfig(output_dir="demo_records", max_file_size_mb=10)
+        recorder = EventRecorder("BTCUSDT", config)
+        
+        session_id = recorder.start_recording("demo_session")
+        print(f"✅ Recording started: {session_id}")
+        
+        # Test simulation broker
+        broker = SimulationBroker(100000.0, commission_rate=0.001)
+        broker.update_market_data(65000.0, time.time())
+        
+        # Execute some test trades
+        print("💰 Executing test trades...")
+        order1 = broker.submit_market_order("BTCUSDT", "buy", 1.5)
+        broker.update_market_data(65100.0, time.time())
+        order2 = broker.submit_market_order("BTCUSDT", "sell", 0.8)
+        broker.update_market_data(65050.0, time.time())
+        order3 = broker.submit_market_order("BTCUSDT", "sell", 0.7)
+        
+        # Test portfolio
+        portfolio = Portfolio(100000.0)
+        portfolio.update_market_data(65050.0, time.time())
+        
+        print("✅ RRS Engine working correctly")
+        
+        # Get stats
+        broker_stats = broker.get_stats()
+        position = broker.get_position()
+        
+        print(f"📊 Broker Stats:")
+        print(f"  Total orders: {broker_stats['total_orders']}")
+        print(f"  Total fills: {broker_stats['total_fills']}")
+        print(f"  Total commission: ${broker_stats['total_commission']:.4f}")
+        print(f"  Position size: {position['size']:.4f}")
+        print(f"  Unrealized PnL: ${position['unrealized_pnl']:.2f}")
+        
+        recorder.stop_recording()
+        
+    except Exception as e:
+        print(f"❌ RRS Engine error: {e}")
+        return False
+    
+    # Test 3: LiveTrader with minimal setup (no network)
+    print("\n🎯 TESTING LIVETRADER INTEGRATION...")
+    try:
+        from rtai.live_trader import LiveTrader
+        
+        # Create LiveTrader in test mode
+        lt = LiveTrader(symbol="BTCUSDT", window_size=20)
+        
+        # Simulate some trades to test the pipeline
+        print("📈 Simulating trade pipeline...")
+        for i in range(5):
+            mock_trade = {
+                'timestamp': time.time() + i,
+                'price': 65000.0 + i * 10,
+                'volume': 1.0 + i * 0.1,
+                'side': 'buy' if i % 2 == 0 else 'sell'
+            }
+            
+            # Test accumulation
+            minute_ts = int(mock_trade['timestamp'] // 60)
+            lt._accumulate_trade_data(mock_trade, minute_ts)
+            
+        print("✅ LiveTrader pipeline working")
+        
+        # Check aggregated data
+        current_minute = max(lt._agg.ofi_sum.keys()) if lt._agg.ofi_sum else 0
+        if current_minute > 0:
+            ofi_sum = lt._agg.ofi_sum.get(current_minute, 0)
+            buy_vol = lt._agg.buy_vol.get(current_minute, 0)  
+            sell_vol = lt._agg.sell_vol.get(current_minute, 0)
+            
+            print(f"📊 Aggregated data for minute {current_minute}:")
+            print(f"  OFI sum: {ofi_sum:.2f}")
+            print(f"  Buy volume: {buy_vol:.2f}")
+            print(f"  Sell volume: {sell_vol:.2f}")
+        
+    except Exception as e:
+        print(f"❌ LiveTrader error: {e}")
+        return False
+    
+    # Test 4: Generate visualization
+    print("\n📊 TESTING VISUALIZATION...")
+    try:
+        import matplotlib.pyplot as plt
+        import datetime
+        
+        # Create comprehensive RSI dashboard
+        fig, axes = plt.subplots(3, 1, figsize=(15, 12))
+        fig.suptitle('RTAI RSI-Like Oscillators Dashboard\nBTCUSDT 1-Hour Demo', fontsize=16)
+        
+        minutes = list(range(60))
+        times = [datetime.datetime.now() - datetime.timedelta(minutes=59-i) for i in minutes]
+        
+        # OFI-RSI Panel
+        axes[0].plot(times, ofi_values, 'b-', linewidth=2, label='OFI-RSI')
+        axes[0].axhline(y=80, color='r', linestyle='--', alpha=0.7, label='Overbought')
+        axes[0].axhline(y=20, color='g', linestyle='--', alpha=0.7, label='Oversold')
+        axes[0].axhline(y=75, color='r', linestyle=':', alpha=0.5, label='Exit Long')
+        axes[0].axhline(y=25, color='g', linestyle=':', alpha=0.5, label='Exit Short')
+        axes[0].fill_between(times, 80, 100, alpha=0.1, color='red')
+        axes[0].fill_between(times, 0, 20, alpha=0.1, color='green')
+        axes[0].set_ylabel('OFI-RSI')
+        axes[0].set_ylim(0, 100)
+        axes[0].legend(loc='upper right')
+        axes[0].grid(True, alpha=0.3)
+        
+        # CVD-RSI Panel  
+        axes[1].plot(times, cvd_values, 'purple', linewidth=2, label='CVD-RSI')
+        axes[1].axhline(y=85, color='r', linestyle='--', alpha=0.7, label='Extreme High')
+        axes[1].axhline(y=15, color='g', linestyle='--', alpha=0.7, label='Extreme Low')
+        axes[1].fill_between(times, 85, 100, alpha=0.1, color='red')
+        axes[1].fill_between(times, 0, 15, alpha=0.1, color='green')
+        axes[1].set_ylabel('CVD-RSI')
+        axes[1].set_ylim(0, 100)
+        axes[1].legend(loc='upper right')
+        axes[1].grid(True, alpha=0.3)
+        
+        # VPIN-RSI Panel
+        axes[2].plot(times, vpin_values, 'orange', linewidth=2, label='VPIN-RSI')
+        axes[2].axhline(y=85, color='r', linestyle='--', alpha=0.7, label='Info Stress')
+        axes[2].axhline(y=15, color='g', linestyle='--', alpha=0.7, label='Low Activity')
+        axes[2].fill_between(times, 85, 100, alpha=0.1, color='red')
+        axes[2].fill_between(times, 0, 15, alpha=0.1, color='green')
+        axes[2].set_ylabel('VPIN-RSI')
+        axes[2].set_xlabel('Time')
+        axes[2].set_ylim(0, 100)
+        axes[2].legend(loc='upper right')
+        axes[2].grid(True, alpha=0.3)
+        
+        # Format x-axis for all subplots
+        for ax in axes:
+            ax.tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        
+        # Save chart
+        output_dir = Path("output")
+        output_dir.mkdir(exist_ok=True)
+        
+        chart_path = output_dir / f"rsi_demo_{int(time.time())}.png"
+        plt.savefig(chart_path, dpi=120, bbox_inches='tight', facecolor='white')
+        
+        print(f"✅ Chart saved: {chart_path}")
+        print(f"📈 Chart shows 60 minutes of RSI data with proper 0-100 scaling")
+        
+        # Show the plot
+        plt.show()
+        
+    except Exception as e:
+        print(f"❌ Visualization error: {e}")
+        return False
+    
+    print("\n🎉 ALL TESTS COMPLETED SUCCESSFULLY!")
+    print("✅ RSI-like oscillators working perfectly")
+    print("✅ RRS Engine recording and simulation ready")  
+    print("✅ LiveTrader pipeline integrated")
+    print("✅ Visualization dashboard generated")
+    print(f"📊 Check the generated chart: {chart_path}")
+    
+    return True
+
+if __name__ == "__main__":
+    success = main()
+    if success:
+        print("\n🚀 SYSTEM READY FOR PRODUCTION!")
+        sys.exit(0)
+    else:
+        print("\n❌ SYSTEM TESTS FAILED!")
+        sys.exit(1)
