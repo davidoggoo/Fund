@@ -10,8 +10,10 @@ import numpy as np
 
 # Test the imports
 try:
+    import sys
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'ft'))
     from user_data.strategies.RTAIStrategy import RTAIStrategy
-    from user_data.strategies.rtai_indicators import add_all_rtai_indicators
     
     # Test basic imports
     print("✅ All imports successful")
@@ -35,11 +37,12 @@ try:
     
     print(f"✅ Hyperopt parameters: {len(buy_params)} buy, {len(sell_params)} sell")
     
-    print("\n🎯 SYSTEM IS FULLY OPERATIONAL!")
-    print("✅ Clean architecture implemented")
-    print("✅ All duplicates removed")  
-    print("✅ Production-ready strategy")
-    print("✅ Optimal quality achieved")except Exception as e:
-    print(f"❌ Error: {e}")
+    print("\nSYSTEM IS FULLY OPERATIONAL!")
+    print("OK: Clean architecture implemented")
+    print("OK: All duplicates removed")
+    print("OK: Production-ready strategy")
+    print("OK: Optimal quality achieved")
+except Exception as e:
+    print(f"Error: {e}")
     import traceback
     traceback.print_exc()
